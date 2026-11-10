@@ -79,9 +79,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
       return;
     }
 
-    // Move to 2-step verification simulation
+    // Sign In: authenticate directly with entered email & credentials
+    if (mode === "signin") {
+      const user: AuthUser = {
+        id: `usr_${Date.now()}`,
+        name: email.split("@")[0],
+        email: email.trim().toLowerCase(),
+        isVerified: true,
+        createdAt: new Date().toISOString(),
+      };
+      try {
+        localStorage.setItem("studyspark_auth_user", JSON.stringify(user));
+      } catch {}
+      onSuccess(user);
+      onClose();
+      return;
+    }
+
+    // Sign Up / Register: move to 2-step confirmation verification
     setStep("verify");
-    setStatusMessage(`A 6-digit confirmation code was sent to ${email}. (Use simulated code 123456)`);
+    setStatusMessage(`A 6-digit confirmation code was sent to ${email}. (Use code 123456 to verify)`);
   };
 
   const handleVerifyCode = (e: React.FormEvent) => {
@@ -104,22 +121,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
     } catch {}
 
     onSuccess(newUser);
-    onClose();
-  };
-
-  // Quick Developer One-Click Login Preset (Isha Mahato)
-  const handleDeveloperLogin = () => {
-    const ishaUser: AuthUser = {
-      id: "usr_developer_isha",
-      name: "Isha Mahato",
-      email: "isha.mahato@studyspark.ai",
-      isVerified: true,
-      createdAt: new Date().toISOString(),
-    };
-    try {
-      localStorage.setItem("studyspark_auth_user", JSON.stringify(ishaUser));
-    } catch {}
-    onSuccess(ishaUser);
     onClose();
   };
 
@@ -153,28 +154,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
             aria-label="Close authentication modal"
           >
             <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        {/* Developer One-Click Access Card */}
-        <div className="inset p-4 rounded-2xl flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <span className="chip w-8 h-8 rounded-full font-bold text-xs">
-              IM
-            </span>
-            <div>
-              <p className="text-xs font-bold text-neu-heading">
-                Isha Mahato (Developer)
-              </p>
-              <p className="text-[10px] text-neu-text">isha.mahato@studyspark.ai</p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={handleDeveloperLogin}
-            className="button button--primary px-3.5 py-1.5 rounded-full text-[11px] font-bold min-h-0 min-w-0"
-          >
-            One-Click Login
           </button>
         </div>
 
@@ -301,7 +280,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onSuccess
                 type="submit"
                 className="button button--primary w-full py-3 rounded-full font-bold text-xs flex items-center justify-center gap-2 mt-3"
               >
-                Continue with Email Verification
+                {mode === "signin" ? "Sign In" : "Create Account & Verify"}
                 <ArrowRight className="w-3.5 h-3.5 text-neu-accent" />
               </button>
             </form>

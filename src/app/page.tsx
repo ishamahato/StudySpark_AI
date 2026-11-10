@@ -72,24 +72,22 @@ export default function Home() {
       document.documentElement.classList.remove("dark");
     }
 
-    // Authenticated User Session (Defaults to developer Isha Mahato)
+    // Authenticated User Session (Check if user has registered or logged in)
     try {
       const storedUser = localStorage.getItem("studyspark_auth_user");
       if (storedUser) {
-        setUser(JSON.parse(storedUser));
+        const parsed = JSON.parse(storedUser);
+        if (parsed && parsed.id && parsed.id !== "usr_developer_isha") {
+          setUser(parsed);
+        } else {
+          localStorage.removeItem("studyspark_auth_user");
+          setUser(null);
+        }
       } else {
-        const defaultDev: AuthUser = {
-          id: "usr_developer_isha",
-          name: "Isha Mahato",
-          email: "isha.mahato@studyspark.ai",
-          isVerified: true,
-          createdAt: new Date().toISOString(),
-        };
-        setUser(defaultDev);
-        localStorage.setItem("studyspark_auth_user", JSON.stringify(defaultDev));
+        setUser(null);
       }
     } catch (e) {
-      console.warn("Auth load error:", e);
+      setUser(null);
     }
 
     // Saved Sets

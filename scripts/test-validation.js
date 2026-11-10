@@ -3,16 +3,19 @@ const assert = require("assert");
 // Import compiled validation or test logic
 function extractJsonString(raw) {
   let cleaned = raw.trim();
-  const codeBlockMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  const codeBlockMatch = cleaned.match(/```(?:[a-zA-Z0-9_-]+)?\s*([\s\S]*?)\s*```/);
   if (codeBlockMatch && codeBlockMatch[1]) {
     cleaned = codeBlockMatch[1].trim();
   }
+  cleaned = cleaned.replace(/^```(?:[a-zA-Z0-9_-]+)?\s*[\r\n]*/i, "");
+  cleaned = cleaned.replace(/[\r\n]*```\s*$/i, "");
+  cleaned = cleaned.replace(/^(?:json|python|javascript|typescript|js|ts|text|markdown|md)\s*[\r\n]+/i, "");
   const firstBrace = cleaned.indexOf("{");
   const lastBrace = cleaned.lastIndexOf("}");
   if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
     cleaned = cleaned.substring(firstBrace, lastBrace + 1);
   }
-  return cleaned;
+  return cleaned.trim();
 }
 
 function attemptJsonRepair(jsonString) {
@@ -183,4 +186,12 @@ console.log("=== Running Validation & Resilience Unit Tests ===");
   console.log("✓ Test 6: Email validation RFC 5322 regex checks passed");
 }
 
-console.log("\nALL 6 UNIT TESTS PASSED WITH ZERO FAILURES! 🚀\n");
+// Test 7: Python code block and unstructured code recovery
+{
+  const pythonFence = "```python\n{\"title\": \"Python Loops\", \"topic\": \"Computer Science\"}\n```";
+  const extracted = extractJsonString(pythonFence);
+  assert.strictEqual(extracted, '{"title": "Python Loops", "topic": "Computer Science"}');
+  console.log("✓ Test 7: Code fence stripping for python/non-json languages passed");
+}
+
+console.log("\nALL 7 UNIT TESTS PASSED WITH ZERO FAILURES! 🚀\n");

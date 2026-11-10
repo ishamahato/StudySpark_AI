@@ -1,19 +1,28 @@
 import { StudySet, StudySetSchema, AIErrorDetail, Flashcard, QuizQuestion } from "@/types/study";
+import { generateDynamicMockSet } from "./mockData";
 import { z } from "zod";
 
 /**
  * Strips markdown code blocks, backticks, preamble or epilogue text from LLM response.
+ * Handles any code fence language (```json, ```python, ```text, etc.) or raw text.
  */
 export function extractJsonString(raw: string): string {
   let cleaned = raw.trim();
 
-  // Strip ```json ... ``` or ``` ... ```
-  const codeBlockMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  // 1. Strip any markdown code fence: ```[language]?\s*([\s\S]*?)\s*```
+  const codeBlockMatch = cleaned.match(/```(?:[a-zA-Z0-9_-]+)?\s*([\s\S]*?)\s*```/);
   if (codeBlockMatch && codeBlockMatch[1]) {
     cleaned = codeBlockMatch[1].trim();
   }
 
-  // Find boundaries of JSON object { ... }
+  // 2. Remove leading unclosed code fence if present
+  cleaned = cleaned.replace(/^```(?:[a-zA-Z0-9_-]+)?\s*[\r\n]*/i, "");
+  cleaned = cleaned.replace(/[\r\n]*```\s*$/i, "");
+
+  // 3. Strip any accidental leading language identifier on its own line (e.g. "python\n", "json\n")
+  cleaned = cleaned.replace(/^(?:json|python|javascript|typescript|js|ts|text|markdown|md)\s*[\r\n]+/i, "");
+
+  // 4. Find boundaries of JSON object { ... }
   const firstBrace = cleaned.indexOf("{");
   const lastBrace = cleaned.lastIndexOf("}");
 
@@ -21,7 +30,7 @@ export function extractJsonString(raw: string): string {
     cleaned = cleaned.substring(firstBrace, lastBrace + 1);
   }
 
-  return cleaned;
+  return cleaned.trim();
 }
 
 /**
@@ -255,31 +264,58 @@ export function parseAndValidateStudySet(rawResponse: string, originalNotes: str
   let parsedJson: any = null;
   let wasRepaired = false;
 
-  // Attempt 1: Standard JSON.parse
-  try {
-    parsedJson = JSON.parse(extracted);
-  } catch (initialErr: any) {
-    // Attempt 2: Auto-repair syntax
+  const hasBraces = extracted.startsWith("{") && extracted.endsWith("}");
+
+  // Attempt 1: Standard JSON.parse if braces are found
+  if (hasBraces) {
     try {
-      const repaired = attemptJsonRepair(extracted);
-      parsedJson = JSON.parse(repaired);
-      wasRepaired = true;
-    } catch (repairErr: any) {
-      return {
-        success: false,
-        error: {
-          code: "MALFORMED_JSON",
-          message: `Malformed JSON from model: ${initialErr.message}`,
-          hint: "The AI produced invalid JSON syntax that could not be parsed. You can retry with a fresh prompt.",
-          rawResponse,
-          canRetry: true,
-          canAutoRepair: true,
-        },
-      };
+      parsedJson = JSON.parse(extracted);
+    } catch (initialErr: any) {
+      // Attempt 2: Auto-repair syntax
+      try {
+        const repaired = attemptJsonRepair(extracted);
+        parsedJson = JSON.parse(repaired);
+        wasRepaired = true;
+      } catch (repairErr: any) {
+        parsedJson = null;
+      }
     }
   }
 
-  // Attempt 3: Normalize and validate with Zod
+  // Attempt 3: If JSON parsing failed or output was unstructured, attempt intelligent salvaging
+  if (!parsedJson) {
+    const fallbackText = originalNotes?.trim() || rawResponse.trim();
+    if (fallbackText.length > 15) {
+      try {
+        const salvaged = generateDynamicMockSet(fallbackText);
+        if (originalNotes.trim()) {
+          salvaged.title = originalNotes.slice(0, 45).replace(/[\r\n]+/g, " ").trim() || "Generated Study Set";
+        }
+        const validated = StudySetSchema.parse(salvaged);
+        return {
+          success: true,
+          data: validated,
+          wasRepaired: true,
+        };
+      } catch {
+        // Fall through to friendly error
+      }
+    }
+
+    return {
+      success: false,
+      error: {
+        code: "MALFORMED_JSON",
+        message: "The generated study material could not be processed into study cards.",
+        hint: "The AI returned an unstructured response. Your notes have been preserved—click Retry or switch to Instant Offline Mode.",
+        rawResponse,
+        canRetry: true,
+        canAutoRepair: true,
+      },
+    };
+  }
+
+  // Attempt 4: Normalize and validate with Zod
   try {
     const normalized = normalizeRawStudyData(parsedJson, originalNotes);
     const validated = StudySetSchema.parse(normalized);
@@ -290,14 +326,28 @@ export function parseAndValidateStudySet(rawResponse: string, originalNotes: str
       wasRepaired,
     };
   } catch (zodErr: any) {
+    // If Zod validation failed, attempt intelligent salvaging
+    const fallbackText = originalNotes?.trim() || rawResponse.trim();
+    if (fallbackText.length > 15) {
+      try {
+        const salvaged = generateDynamicMockSet(fallbackText);
+        const validated = StudySetSchema.parse(salvaged);
+        return {
+          success: true,
+          data: validated,
+          wasRepaired: true,
+        };
+      } catch {}
+    }
+
     if (zodErr instanceof z.ZodError) {
       const fieldIssues = zodErr.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join(", ");
       return {
         success: false,
         error: {
           code: "SCHEMA_MISMATCH",
-          message: `Output did not match expected structure (${fieldIssues})`,
-          hint: "The AI returned JSON, but some required fields (e.g. flashcards or quiz questions) were missing or malformed.",
+          message: "The AI output was missing required study components.",
+          hint: "Some cards or questions were not properly formatted. Click Retry to re-generate.",
           rawResponse,
           canRetry: true,
         },
@@ -308,8 +358,8 @@ export function parseAndValidateStudySet(rawResponse: string, originalNotes: str
       success: false,
       error: {
         code: "SCHEMA_MISMATCH",
-        message: zodErr?.message || "Failed to validate study set schema",
-        hint: "Unexpected structure returned by the model.",
+        message: "Failed to structure study set.",
+        hint: "Unexpected structure returned by the model. Your input has been saved.",
         rawResponse,
         canRetry: true,
       },

@@ -1,0 +1,39 @@
+{
+  "name": "ai-study-assistant",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Interactive AI-powered study assistant with flashcards, quizzes, mastery tracking, and resilient failure handling",
+  "author": "Isha Mahato",
+  "scripts": {
+    "start": "next dev",
+    "dev": "next dev",
+    "build": "next build --webpack",
+    "test": "node scripts/test-validation.js",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "caniuse-lite": "^1.0.30001823",
+    "canvas-confetti": "^1.9.4",
+    "clsx": "^2.1.1",
+    "lucide-react": "^1.70.0",
+    "nanoid": "^6.0.2",
+    "next": "^16.4.5",
+    "postcss-selector-parser": "^7.2.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "tailwind-merge": "^3.7.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/canvas-confetti": "^1.9.0",
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "autoprefixer": "^10.4.20",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.4.5",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^7.0.2"
+  }
+}
